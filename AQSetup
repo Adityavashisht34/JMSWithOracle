@@ -177,14 +177,19 @@ CREATE USER demo IDENTIFIED BY demo
     -- listen to that in JMS
 
 
-----Application layer------
--- create kafka local instance(docker)
-    -- push/publish changed data in kafka
--- take topic name(<tableName>.<transactionType>) from DB (pass as an parameter in JMS message)
+select user from dual;
+
+GRANT EXECUTE ON DBMS_AQ TO C##DEMO;
+GRANT EXECUTE ON DBMS_AQADM TO C##DEMO;
+
+GRANT DBA TO C##DEMO;
+
+SELECT grantee, privilege, table_name
+FROM dba_tab_privs
+WHERE grantee = 'C##DEMO'
+  AND table_name IN ('DBMS_AQ','DBMS_AQADM');
 
 
+GRANT AQ_USER_ROLE TO C##DEMO;
 
---Expected output
---Update query on Employee table
 
---kafka event present in topic (<tableName>.<transactionType>)
