@@ -1,0 +1,190 @@
+-- 1. Create queue table and queue using AQADM
+BEGIN
+    DBMS_AQADM.CREATE_QUEUE_TABLE(
+            queue_table => 'MyQueueTable4',
+            queue_payload_type => 'SYS.AQ$_JMS_TEXT_MESSAGE'
+    );
+end;
+
+select * from MyQueueTable4;
+BEGIN
+    DBMS_AQADM.CREATE_QUEUE(
+            queue_name => 'Table_Alteration_Queue',
+            queue_table => 'MyQueueTable4'
+    );
+end;
+
+begin
+    DBMS_AQADM.START_QUEUE(queue_name => 'Table_Alteration_Queue');
+end;
+
+/
+
+
+
+
+
+SELECT BANNER FROM V$VERSION;
+-- Enqueue
+
+    DECLARE
+        enqueue_semantics     dbms_aq.enqueue_options_t;   --controls enqueue behavior.
+        message_properties  dbms_aq.message_properties_t; --metadata/properties of the message.
+        msgid     RAW(16); --unique ID for the message
+        message     SYS.AQ$_JMS_TEXT_MESSAGE ;
+
+    BEGIN
+        message := sys.AQ$_JMS_TEXT_MESSAGE.construct();
+        message.SET_TEXT(message);
+
+        DBMS_AQ.ENQUEUE(
+                queue_name          => 'Table_Alteration_Queue',
+                enqueue_options     => enqueue_semantics,
+                message_properties  => message_properties,
+                payload             =>  message,
+                msgid               => msgid
+        );
+        DBMS_OUTPUT.PUT_LINE(msgid);
+        COMMIT;
+    END;
+
+
+/
+
+create or replace procedure Alter_Employee_Table_Procedure(
+    transaction IN varchar2
+)
+as
+    begin
+        DECLARE
+            enqueue_semantics     dbms_aq.enqueue_options_t;   --controls enqueue behavior.
+            message_properties  dbms_aq.message_properties_t; --metadata/properties of the message.
+            msgid     RAW(16); --unique ID for the message
+            message     SYS.AQ$_JMS_TEXT_MESSAGE ;
+
+        BEGIN
+            message := sys.AQ$_JMS_TEXT_MESSAGE.construct();
+            message.SET_TEXT(transaction);
+
+            DBMS_AQ.ENQUEUE(
+                    queue_name          => 'Table_Alteration_Queue',
+                    enqueue_options     => enqueue_semantics,
+                    message_properties  => message_properties,
+                    payload             =>  message,
+                    msgid               => msgid
+            );
+            COMMIT;
+        END;
+    end;
+/
+
+
+DECLARE
+    enqueue_semantics     dbms_aq.enqueue_options_t;   --controls enqueue behavior.
+    message_properties  dbms_aq.message_properties_t; --metadata/properties of the message.
+    msgid     RAW(16); --unique ID for the message
+    message     SYS.AQ$_JMS_TEXT_MESSAGE ;
+
+BEGIN
+    message := sys.AQ$_JMS_TEXT_MESSAGE.construct();
+    message.SET_TEXT('abcd');
+
+    DBMS_AQ.ENQUEUE(
+            queue_name          => 'Table_Alteration_Queue',
+            enqueue_options     => enqueue_semantics,
+            message_properties  => message_properties,
+            payload             =>  message,
+            msgid               => msgid
+    );
+    DBMS_OUTPUT.PUT_LINE(msgid);
+    COMMIT;
+END;
+/
+select * from MYQUEUETABLE4;
+--Dequeue
+DECLARE
+    dequeue_semantics    dbms_aq.dequeue_options_t;
+    message_properties  dbms_aq.message_properties_t;
+    message_handle     RAW(16);
+    message       Varchar2(3000);
+begin
+    DBMS_AQ.DEQUEUE(
+            queue_name => 'MyQueue3',
+            dequeue_options =>dequeue_semantics,
+            message_properties => message_properties,
+            payload => message,
+            msgid => message_handle
+    );
+    DBMS_OUTPUT.PUT_LINE(message);
+    DBMS_OUTPUT.PUT_LINE(UTL_RAW.CAST_TO_VARCHAR2(message));
+    COMMIT;
+end;
+
+select * from MyQueueTable2;
+
+
+create table Employee(
+    empID number generated as identity primary key,
+    empName varchar2(50),
+    empDepart varchar2(50)
+);
+
+CREATE OR REPLACE TRIGGER Alteration_Employee_Table_Trigger
+    BEFORE INSERT OR UPDATE OR DELETE ON Employee
+    FOR EACH ROW
+    DECLARE
+        oldEmpID number;
+        newEmpID number;
+        oldEmpName varchar2(50);
+        newEmpName varchar2(50);
+        oldEmpDepart varchar2(50);
+        newEmpDepart varchar2(50);
+        message varchar2(100000);
+BEGIN
+    IF INSERTING THEN
+        newEmpID := :NEW.empID;
+        newEmpName:= :NEW.empName;
+        newEmpDepart:= :NEW.empDepart;
+        message:= newEmpID+' '+newEmpName+' '+newEmpDepart+' '+'insert';
+        exec Alter_Employee_Table_Procedure(message);
+
+    ELSIF UPDATING THEN
+        oldEmpID:= :OLD.empID;
+        oldEmpName:= :OLD.empName;
+        oldEmpDepart:= :OLD.empDepart;
+        newEmpID := :NEW.empID;
+        newEmpName:= :NEW.empName;
+        newEmpDepart:= :NEW.empDepart;
+        message:= oldEmpID+' '+newEmpID+' '+oldEmpName+' '+newEmpName+' '+oldEmpDepart+' '+newEmpDepart+' '+'update';
+        exec Alter_Employee_Table_Procedure(message);
+    ELSIF DELETING THEN
+        oldEmpID:= :OLD.empID;
+        oldEmpName:= :OLD.empName;
+        oldEmpDepart:= :OLD.empDepart;
+        message:= oldEmpID+' '+oldEmpName+' '+oldEmpDepart+' '+'delete';
+        exec Alter_Employee_Table_Procedure(message);
+    END IF;
+END;
+/
+
+
+CREATE USER demo IDENTIFIED BY demo
+
+
+-- create a table of employees
+-- when data(employee code/ name/department ) is changed
+    -- check for changed data and push that as event in JMS(old value and new value)
+    -- listen to that in JMS
+
+
+----Application layer------
+-- create kafka local instance(docker)
+    -- push/publish changed data in kafka
+-- take topic name(<tableName>.<transactionType>) from DB (pass as an parameter in JMS message)
+
+
+
+--Expected output
+--Update query on Employee table
+
+--kafka event present in topic (<tableName>.<transactionType>)
